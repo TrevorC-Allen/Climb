@@ -37,6 +37,9 @@ const GRADE_OPTIONS = {
 const MEDIAPIPE_TASKS_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34";
 const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm";
 const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
+const OPENBETA_API_URL = "https://api.openbeta.io";
+const OPENBETA_AREA_URL = "https://openbeta.io/area/";
+const GUIDEBOOK_QUICK_SEARCHES = ["Smith Rock", "Red River Gorge", "Yosemite Valley", "Bishop", "Joshua Tree"];
 
 const POSE_CONNECTIONS = [
   [11, 12],
@@ -144,6 +147,8 @@ let latestPoseValues = null;
 let lastPoseVideoTime = -1;
 let lastPoseRenderTime = 0;
 let supportTracker = {};
+let guidebookResults = [];
+let selectedGuidebookArea = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -206,6 +211,10 @@ function bindEvents() {
   $("#historyFilter").addEventListener("change", renderHistory);
   $("#gymFilter").addEventListener("change", renderHistory);
   $("#historyTable").addEventListener("click", handleHistoryClick);
+  $("#guidebookSearchForm").addEventListener("submit", handleGuidebookSearch);
+  $("#guidebookQuickSearch").addEventListener("click", handleGuidebookQuickSearch);
+  $("#guidebookResults").addEventListener("click", handleGuidebookResultAction);
+  $("#guidebookSavedList").addEventListener("click", handleGuidebookSavedAction);
 
   $("#exportButton").addEventListener("click", exportData);
   $("#importButton").addEventListener("click", () => $("#importInput").click());
@@ -240,6 +249,7 @@ function loadState() {
       return migrateState({
         entries: Array.isArray(parsed.entries) ? parsed.entries : [],
         motionSnapshots: Array.isArray(parsed.motionSnapshots) ? parsed.motionSnapshots : [],
+        guidebookSaved: Array.isArray(parsed.guidebookSaved) ? parsed.guidebookSaved : [],
       });
     }
   } catch (error) {
@@ -284,6 +294,7 @@ function createSeedState() {
         },
       },
     ],
+    guidebookSaved: [],
   };
 }
 
@@ -306,6 +317,7 @@ function migrateState(data) {
       };
     }),
     motionSnapshots: data.motionSnapshots,
+    guidebookSaved: Array.isArray(data.guidebookSaved) ? data.guidebookSaved : [],
   };
 }
 
@@ -348,6 +360,7 @@ function setView(viewName) {
   const titleMap = {
     dashboard: "训练看板",
     log: "记录训练",
+    guidebook: "野攀路书",
     motion: "动作分析",
     history: "历史记录",
     roadmap: "产品路线图",
@@ -377,6 +390,7 @@ function renderAll() {
   renderSessionSummary();
   renderGymOptions();
   renderHistory();
+  renderGuidebook();
   renderRoadmap();
   saveState();
 }
@@ -729,6 +743,291 @@ function renderHistory() {
       <td><button class="delete-row" type="button" data-delete-id="${entry.id}">删除</button></td>
     </tr>
   `).join("");
+}
+
+function renderGuidebook() {
+  renderGuidebookQuickSearch();
+  renderGuidebookResults();
+  renderGuidebookSaved();
+  renderGuidebookDetail(selectedGuidebookArea);
+}
+
+function renderGuidebookQuickSearch() {
+  $("#guidebookQuickSearch").innerHTML = GUIDEBOOK_QUICK_SEARCHES.map((query) => `
+    <button class="quick-chip" type="button" data-guidebook-query="${escapeHtml(query)}">${escapeHtml(query)}</button>
+  `).join("");
+}
+
+async function handleGuidebookSearch(event) {
+  event.preventDefault();
+  const query = $("#guidebookSearchInput").value.trim();
+  if (!query) {
+    return;
+  }
+  await searchGuidebook(query);
+}
+
+function handleGuidebookQuickSearch(event) {
+  const button = event.target.closest("[data-guidebook-query]");
+  if (!button) {
+    return;
+  }
+  $("#guidebookSearchInput").value = button.dataset.guidebookQuery;
+  searchGuidebook(button.dataset.guidebookQuery);
+}
+
+async function searchGuidebook(query) {
+  $("#guidebookStatus").textContent = "正在查询 OpenBeta";
+  $("#guidebookResults").innerHTML = `<div class="empty-state">正在加载路书数据</div>`;
+
+  try {
+    const areas = await fetchOpenBetaAreas(query);
+    guidebookResults = areas.slice(0, 10);
+    selectedGuidebookArea = guidebookResults[0] || null;
+    $("#guidebookStatus").textContent = guidebookResults.length ? `找到 ${guidebookResults.length} 个区域` : "没有找到匹配区域";
+    renderGuidebookResults();
+    renderGuidebookDetail(selectedGuidebookArea);
+  } catch (error) {
+    console.warn("Guidebook search failed", error);
+    $("#guidebookStatus").textContent = "OpenBeta 暂不可用";
+    $("#guidebookResults").innerHTML = `
+      <div class="empty-state">
+        无法读取开放路书数据。可以直接打开 OpenBeta 或 theCrag 查询。
+      </div>
+    `;
+  }
+}
+
+async function fetchOpenBetaAreas(term) {
+  const query = `
+    query SearchAreas($term: String!) {
+      areas(filter: { area_name: { match: $term } }) {
+        area_name
+        uuid
+        metadata { lat lng }
+        climbs {
+          name
+          grades { yds vscale }
+          type { trad sport bouldering aid ice mixed }
+        }
+        children {
+          area_name
+          uuid
+          metadata { lat lng }
+          climbs {
+            name
+            grades { yds vscale }
+            type { trad sport bouldering aid ice mixed }
+          }
+        }
+      }
+    }
+  `;
+
+  const response = await fetch(OPENBETA_API_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      query,
+      variables: { term },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenBeta ${response.status}`);
+  }
+
+  const payload = await response.json();
+  if (payload.errors?.length) {
+    throw new Error(payload.errors[0].message);
+  }
+  return (payload.data?.areas || []).map(normalizeGuidebookArea);
+}
+
+function normalizeGuidebookArea(area) {
+  const children = (area.children || []).map((child) => ({
+    uuid: child.uuid,
+    name: child.area_name,
+    lat: child.metadata?.lat ?? null,
+    lng: child.metadata?.lng ?? null,
+    climbs: (child.climbs || []).map(normalizeClimb),
+  }));
+
+  return {
+    uuid: area.uuid,
+    name: area.area_name,
+    lat: area.metadata?.lat ?? null,
+    lng: area.metadata?.lng ?? null,
+    climbs: (area.climbs || []).map(normalizeClimb),
+    children,
+  };
+}
+
+function normalizeClimb(climb) {
+  return {
+    name: climb.name,
+    grade: climb.grades?.vscale || climb.grades?.yds || "-",
+    type: climbTypeLabel(climb.type),
+  };
+}
+
+function renderGuidebookResults() {
+  if (!guidebookResults.length) {
+    $("#guidebookResults").innerHTML = `<div class="empty-state">搜索野攀区域</div>`;
+    return;
+  }
+
+  $("#guidebookResults").innerHTML = guidebookResults.map((area) => guidebookAreaCard(area, false)).join("");
+}
+
+function renderGuidebookSaved() {
+  if (!state.guidebookSaved.length) {
+    $("#guidebookSavedList").innerHTML = `<div class="empty-state">还没有收藏路书</div>`;
+    return;
+  }
+
+  $("#guidebookSavedList").innerHTML = state.guidebookSaved.map((area) => guidebookAreaCard(area, true)).join("");
+}
+
+function guidebookAreaCard(area, saved) {
+  const climbCount = area.climbs?.length || 0;
+  const childCount = area.children?.length || 0;
+  const coordinate = hasCoordinates(area) ? `${Number(area.lat).toFixed(3)}, ${Number(area.lng).toFixed(3)}` : "坐标未知";
+  return `
+    <article class="guidebook-card">
+      <div>
+        <strong>${escapeHtml(area.name)}</strong>
+        <p>${escapeHtml(coordinate)}</p>
+        <div class="guidebook-meta">
+          <span>${climbCount} 条线路</span>
+          <span>${childCount} 个子区域</span>
+        </div>
+      </div>
+      <div class="guidebook-actions">
+        <button class="secondary-button" type="button" data-guidebook-open="${area.uuid}">预览</button>
+        ${saved
+          ? `<button class="secondary-button danger" type="button" data-guidebook-remove="${area.uuid}">移除</button>`
+          : `<button class="secondary-button" type="button" data-guidebook-save="${area.uuid}">收藏</button>`}
+        <a class="icon-button" href="${OPENBETA_AREA_URL}${area.uuid}" target="_blank" rel="noreferrer" aria-label="打开 OpenBeta" title="打开 OpenBeta">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7h-2V6.4l-8.3 8.3-1.4-1.4L17.6 5H14V3ZM5 5h6v2H7v10h10v-4h2v6H5V5Z"/></svg>
+        </a>
+      </div>
+    </article>
+  `;
+}
+
+function handleGuidebookResultAction(event) {
+  const openButton = event.target.closest("[data-guidebook-open]");
+  const saveButton = event.target.closest("[data-guidebook-save]");
+  if (openButton) {
+    selectGuidebookArea(openButton.dataset.guidebookOpen);
+    return;
+  }
+  if (saveButton) {
+    saveGuidebookArea(saveButton.dataset.guidebookSave);
+  }
+}
+
+function handleGuidebookSavedAction(event) {
+  const openButton = event.target.closest("[data-guidebook-open]");
+  const removeButton = event.target.closest("[data-guidebook-remove]");
+  if (openButton) {
+    selectGuidebookArea(openButton.dataset.guidebookOpen);
+    return;
+  }
+  if (removeButton) {
+    state.guidebookSaved = state.guidebookSaved.filter((area) => area.uuid !== removeButton.dataset.guidebookRemove);
+    if (selectedGuidebookArea?.uuid === removeButton.dataset.guidebookRemove) {
+      selectedGuidebookArea = null;
+    }
+    renderGuidebook();
+    saveState();
+  }
+}
+
+function selectGuidebookArea(uuid) {
+  const area = findGuidebookArea(uuid);
+  if (!area) {
+    return;
+  }
+  selectedGuidebookArea = area;
+  renderGuidebookDetail(area);
+}
+
+function saveGuidebookArea(uuid) {
+  const area = findGuidebookArea(uuid);
+  if (!area || state.guidebookSaved.some((item) => item.uuid === uuid)) {
+    return;
+  }
+  state.guidebookSaved.unshift(area);
+  renderGuidebookSaved();
+  saveState();
+}
+
+function findGuidebookArea(uuid) {
+  return guidebookResults.find((area) => area.uuid === uuid) || state.guidebookSaved.find((area) => area.uuid === uuid);
+}
+
+function renderGuidebookDetail(area) {
+  const link = $("#guidebookExternalLink");
+  if (!area) {
+    link.href = "https://openbeta.io";
+    $("#guidebookDetail").innerHTML = `<div class="empty-state">选择一个区域查看线路</div>`;
+    return;
+  }
+
+  link.href = `${OPENBETA_AREA_URL}${area.uuid}`;
+  const children = area.children || [];
+  const climbs = area.climbs?.length ? area.climbs : children.flatMap((child) => (child.climbs || []).map((climb) => ({ ...climb, areaName: child.name })));
+  const rows = climbs.slice(0, 12);
+  const childRows = children.slice(0, 8);
+  $("#guidebookDetail").innerHTML = `
+    <div class="guidebook-detail-head">
+      <div>
+        <strong>${escapeHtml(area.name)}</strong>
+        <p>${hasCoordinates(area) ? `${Number(area.lat).toFixed(5)}, ${Number(area.lng).toFixed(5)}` : "OpenBeta 区域"}</p>
+      </div>
+      <span class="status-pill">${(area.climbs?.length || 0) + children.reduce((sum, child) => sum + (child.climbs?.length || 0), 0)} 条线路</span>
+    </div>
+    <div class="route-list">
+      ${rows.length ? rows.map((climb) => `
+        <article class="route-row">
+          <div>
+            <strong>${escapeHtml(climb.name)}</strong>
+            <p>${escapeHtml(climb.areaName || area.name)}</p>
+          </div>
+          <span>${escapeHtml(climb.grade)}</span>
+          <small>${escapeHtml(climb.type)}</small>
+        </article>
+      `).join("") : `<div class="empty-state">这个区域主要按子区域组织，打开 OpenBeta 查看完整路书</div>`}
+    </div>
+    ${childRows.length ? `
+      <div class="subarea-list">
+        ${childRows.map((child) => `
+          <a href="${OPENBETA_AREA_URL}${child.uuid}" target="_blank" rel="noreferrer">${escapeHtml(child.name)}</a>
+        `).join("")}
+      </div>
+    ` : ""}
+  `;
+}
+
+function hasCoordinates(area) {
+  return Number.isFinite(Number(area.lat)) && Number.isFinite(Number(area.lng));
+}
+
+function climbTypeLabel(type) {
+  if (!type) {
+    return "-";
+  }
+  const labels = [
+    ["sport", "Sport"],
+    ["trad", "Trad"],
+    ["bouldering", "Boulder"],
+    ["aid", "Aid"],
+    ["ice", "Ice"],
+    ["mixed", "Mixed"],
+  ];
+  return labels.filter(([key]) => type[key]).map(([, label]) => label).join(" / ") || "-";
 }
 
 function renderRoadmap() {
@@ -1524,6 +1823,7 @@ function importData(event) {
       state = migrateState({
         entries: imported.entries,
         motionSnapshots: Array.isArray(imported.motionSnapshots) ? imported.motionSnapshots : [],
+        guidebookSaved: Array.isArray(imported.guidebookSaved) ? imported.guidebookSaved : [],
       });
       renderAll();
     } catch (error) {

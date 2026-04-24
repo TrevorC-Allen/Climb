@@ -339,7 +339,8 @@ svg {
 
 .dashboard-layout,
 .editor-layout,
-.motion-layout {
+.motion-layout,
+.guidebook-layout {
   display: grid;
   gap: 14px;
 }
@@ -359,6 +360,11 @@ svg {
 
 .motion-layout {
   grid-template-columns: minmax(0, 1.2fr) minmax(330px, 0.8fr);
+}
+
+.guidebook-layout {
+  grid-template-columns: minmax(0, 1.2fr) minmax(330px, 0.8fr);
+  margin-bottom: 14px;
 }
 
 .panel {
@@ -500,6 +506,8 @@ svg {
 .mini-timeline,
 .progress-strip,
 .motion-metrics,
+.guidebook-results,
+.guidebook-saved,
 .roadmap-now {
   display: grid;
   gap: 10px;
@@ -510,6 +518,8 @@ svg {
 .progress-item,
 .session-card,
 .motion-card,
+.guidebook-card,
+.route-row,
 .roadmap-now-item,
 .benchmark-item {
   border: 1px solid var(--line);
@@ -528,6 +538,8 @@ svg {
 .progress-item strong,
 .session-card strong,
 .motion-card strong,
+.guidebook-card strong,
+.route-row strong,
 .roadmap-now-item strong,
 .benchmark-item strong {
   display: block;
@@ -540,11 +552,163 @@ svg {
 .progress-item p,
 .session-card p,
 .motion-card p,
+.guidebook-card p,
+.route-row p,
 .benchmark-item p {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.guidebook-hero {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.55fr) minmax(280px, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.guidebook-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.guidebook-quick,
+.source-row,
+.guidebook-meta,
+.guidebook-actions,
+.subarea-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.guidebook-quick {
+  grid-column: 1 / -1;
+}
+
+.quick-chip {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.source-row {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-row a,
+.secondary-link,
+.subarea-list a {
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 750;
+}
+
+.guidebook-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.guidebook-meta {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.guidebook-actions {
+  justify-content: flex-end;
+}
+
+.guidebook-actions .secondary-button {
+  min-height: 34px;
+}
+
+.guidebook-actions .icon-button {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+}
+
+.guidebook-detail-panel {
+  margin-bottom: 14px;
+}
+
+.guidebook-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.guidebook-detail-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.guidebook-detail-head strong {
+  display: block;
+  font-size: 18px;
+}
+
+.guidebook-detail-head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.route-list {
+  display: grid;
+  gap: 8px;
+}
+
+.route-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 90px;
+  align-items: center;
+  gap: 10px;
+  box-shadow: none;
+}
+
+.route-row span,
+.route-row small {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.route-row small {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.subarea-list {
+  padding-top: 2px;
+}
+
+.subarea-list a {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0 9px;
+  font-size: 12px;
 }
 
 .roadmap-hero {
@@ -993,8 +1157,10 @@ tbody tr:last-child td {
   .lower-layout,
   .editor-layout,
   .motion-layout,
+  .guidebook-layout,
   .roadmap-hero,
-  .roadmap-grid {
+  .roadmap-grid,
+  .guidebook-hero {
     grid-template-columns: 1fr;
   }
 
@@ -1021,7 +1187,7 @@ tbody tr:last-child td {
   }
 
   .nav-list {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .nav-item {
@@ -1087,8 +1253,21 @@ tbody tr:last-child td {
 
   .recent-item,
   .progress-item,
-  .motion-card {
+  .motion-card,
+  .guidebook-card,
+  .route-row {
     grid-template-columns: 1fr;
+  }
+
+  .guidebook-search {
+    grid-template-columns: 1fr;
+  }
+
+  .guidebook-actions,
+  .route-row span,
+  .route-row small {
+    justify-content: flex-start;
+    text-align: left;
   }
 
   .benchmark-grid {

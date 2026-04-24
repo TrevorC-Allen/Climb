@@ -1,4 +1,4 @@
-const CACHE_NAME = "climb-training-v2";
+const CACHE_NAME = "climb-training-v3";
 
 const APP_SHELL = [
   "./",
