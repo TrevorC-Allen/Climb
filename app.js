@@ -1,4 +1,6 @@
-const STORE_KEY = "climb.training.v1";
+const LEGACY_STORE_KEY = "climb.training.v1";
+const ACCOUNT_INDEX_KEY = "climb.accounts.v1";
+const ACCOUNT_DATA_PREFIX = "climb.account";
 const SENT_RESULTS = new Set(["flash", "onsight", "send"]);
 const ROUTE_DISCIPLINES = new Set(["toprope", "lead"]);
 
@@ -132,6 +134,8 @@ const PRODUCT_BENCHMARKS = [
   },
 ];
 
+let accountStore = loadAccountStore();
+let currentAccount = getActiveAccount();
 let state = loadState();
 let dashboardFilter = "all";
 let cameraStream = null;
@@ -215,6 +219,10 @@ function bindEvents() {
   $("#guidebookQuickSearch").addEventListener("click", handleGuidebookQuickSearch);
   $("#guidebookResults").addEventListener("click", handleGuidebookResultAction);
   $("#guidebookSavedList").addEventListener("click", handleGuidebookSavedAction);
+  $("#accountButton").addEventListener("click", toggleAccountPanel);
+  $("#accountCloseButton").addEventListener("click", closeAccountPanel);
+  $("#accountCreateForm").addEventListener("submit", handleAccountCreate);
+  $("#accountList").addEventListener("click", handleAccountAction);
 
   $("#exportButton").addEventListener("click", exportData);
   $("#importButton").addEventListener("click", () => $("#importInput").click());
@@ -241,9 +249,80 @@ function registerServiceWorker() {
   });
 }
 
+function loadAccountStore() {
+  const existing = readJson(ACCOUNT_INDEX_KEY);
+  if (existing?.accounts?.length) {
+    const accounts = existing.accounts.map(normalizeAccount).filter(Boolean);
+    const activeAccountId = accounts.some((account) => account.id === existing.activeAccountId)
+      ? existing.activeAccountId
+      : accounts[0].id;
+    return {
+      activeAccountId,
+      accounts,
+    };
+  }
+
+  const defaultAccount = createAccountRecord("我的账号", "");
+  const legacyState = readJson(LEGACY_STORE_KEY);
+  const initialState = legacyState
+    ? migrateState({
+        entries: Array.isArray(legacyState.entries) ? legacyState.entries : [],
+        motionSnapshots: Array.isArray(legacyState.motionSnapshots) ? legacyState.motionSnapshots : [],
+        guidebookSaved: Array.isArray(legacyState.guidebookSaved) ? legacyState.guidebookSaved : [],
+      })
+    : createSeedState();
+
+  localStorage.setItem(defaultAccount.dataKey, JSON.stringify(initialState));
+  const store = {
+    activeAccountId: defaultAccount.id,
+    accounts: [defaultAccount],
+  };
+  saveAccountStore(store);
+  return store;
+}
+
+function normalizeAccount(account) {
+  if (!account?.id || !account?.name) {
+    return null;
+  }
+
+  return {
+    id: account.id,
+    name: account.name,
+    email: account.email || "",
+    createdAt: account.createdAt || new Date().toISOString(),
+    lastActiveAt: account.lastActiveAt || new Date().toISOString(),
+    dataKey: account.dataKey || accountDataKey(account.id),
+  };
+}
+
+function createAccountRecord(name, email) {
+  const id = makeId();
+  return {
+    id,
+    name: name.trim(),
+    email: email.trim(),
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    dataKey: accountDataKey(id),
+  };
+}
+
+function saveAccountStore(store = accountStore) {
+  localStorage.setItem(ACCOUNT_INDEX_KEY, JSON.stringify(store));
+}
+
+function accountDataKey(accountId) {
+  return `${ACCOUNT_DATA_PREFIX}.${accountId}.data.v1`;
+}
+
+function getActiveAccount() {
+  return accountStore.accounts.find((account) => account.id === accountStore.activeAccountId) || accountStore.accounts[0];
+}
+
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = localStorage.getItem(currentAccount.dataKey);
     if (raw) {
       const parsed = JSON.parse(raw);
       return migrateState({
@@ -256,11 +335,33 @@ function loadState() {
     console.warn("Failed to load local data", error);
   }
 
-  return createSeedState();
+  return createEmptyState();
 }
 
 function saveState() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  localStorage.setItem(currentAccount.dataKey, JSON.stringify(state));
+  currentAccount.lastActiveAt = new Date().toISOString();
+  accountStore.accounts = accountStore.accounts.map((account) => account.id === currentAccount.id ? currentAccount : account);
+  accountStore.activeAccountId = currentAccount.id;
+  saveAccountStore();
+}
+
+function readJson(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.warn(`Failed to read ${key}`, error);
+    return null;
+  }
+}
+
+function createEmptyState() {
+  return {
+    entries: [],
+    motionSnapshots: [],
+    guidebookSaved: [],
+  };
 }
 
 function createSeedState() {
@@ -382,6 +483,7 @@ function setView(viewName) {
 
 function renderAll() {
   state.entries.sort((a, b) => `${b.date}${b.createdAt || ""}`.localeCompare(`${a.date}${a.createdAt || ""}`));
+  renderAccount();
   renderStats();
   renderGradeChart();
   renderAdvice();
@@ -402,6 +504,127 @@ function renderStyleTags() {
       <span>${label}</span>
     </label>
   `).join("");
+}
+
+function renderAccount() {
+  const initials = accountInitials(currentAccount.name);
+  $("#accountAvatar").textContent = initials;
+  $("#accountNameLabel").textContent = currentAccount.name;
+
+  const sent = state.entries.filter(isSent).length;
+  $("#accountSummary").innerHTML = `
+    <article class="account-summary-card">
+      <span>${escapeHtml(currentAccount.email || "本地资料")}</span>
+      <strong>${escapeHtml(currentAccount.name)}</strong>
+      <p>${state.entries.length} 条记录，${sent} 条完成，${state.guidebookSaved.length} 个路书收藏。</p>
+    </article>
+  `;
+
+  $("#accountList").innerHTML = accountStore.accounts.map((account) => {
+    const accountState = readJson(account.dataKey) || createEmptyState();
+    const active = account.id === currentAccount.id;
+    return `
+      <article class="account-row ${active ? "active" : ""}">
+        <div class="account-row-avatar">${escapeHtml(accountInitials(account.name))}</div>
+        <div>
+          <strong>${escapeHtml(account.name)}</strong>
+          <p>${escapeHtml(account.email || "本地账号")} · ${accountState.entries?.length || 0} 条记录</p>
+        </div>
+        <div class="account-row-actions">
+          ${active ? `<span class="status-pill">当前</span>` : `<button class="secondary-button" type="button" data-account-switch="${account.id}">切换</button>`}
+          <button class="secondary-button danger" type="button" data-account-delete="${account.id}" ${accountStore.accounts.length <= 1 ? "disabled" : ""}>删除</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function accountInitials(name) {
+  const trimmed = String(name || "C").trim();
+  return trimmed.slice(0, 1).toUpperCase();
+}
+
+function toggleAccountPanel() {
+  const panel = $("#accountPanel");
+  const nextOpen = panel.hidden;
+  panel.hidden = !nextOpen;
+  $("#accountButton").setAttribute("aria-expanded", String(nextOpen));
+  if (nextOpen) {
+    renderAccount();
+  }
+}
+
+function closeAccountPanel() {
+  $("#accountPanel").hidden = true;
+  $("#accountButton").setAttribute("aria-expanded", "false");
+}
+
+function handleAccountCreate(event) {
+  event.preventDefault();
+  const name = $("#accountNameInput").value.trim();
+  const email = $("#accountEmailInput").value.trim();
+  if (!name) {
+    return;
+  }
+
+  const account = createAccountRecord(name, email);
+  accountStore.accounts.push(account);
+  accountStore.activeAccountId = account.id;
+  currentAccount = account;
+  state = createEmptyState();
+  saveAccountStore();
+  saveState();
+  $("#accountCreateForm").reset();
+  renderAll();
+}
+
+function handleAccountAction(event) {
+  const switchButton = event.target.closest("[data-account-switch]");
+  const deleteButton = event.target.closest("[data-account-delete]");
+
+  if (switchButton) {
+    switchAccount(switchButton.dataset.accountSwitch);
+    return;
+  }
+
+  if (deleteButton) {
+    deleteAccount(deleteButton.dataset.accountDelete);
+  }
+}
+
+function switchAccount(accountId) {
+  const account = accountStore.accounts.find((item) => item.id === accountId);
+  if (!account) {
+    return;
+  }
+
+  accountStore.activeAccountId = account.id;
+  currentAccount = account;
+  state = loadState();
+  saveAccountStore();
+  renderAll();
+}
+
+function deleteAccount(accountId) {
+  const account = accountStore.accounts.find((item) => item.id === accountId);
+  if (!account || accountStore.accounts.length <= 1) {
+    return;
+  }
+
+  const ok = confirm(`删除本地账号「${account.name}」？这会删除这个账号在本机保存的训练记录、动作片段和路书收藏。`);
+  if (!ok) {
+    return;
+  }
+
+  localStorage.removeItem(account.dataKey);
+  accountStore.accounts = accountStore.accounts.filter((item) => item.id !== accountId);
+  if (currentAccount.id === accountId) {
+    currentAccount = accountStore.accounts[0];
+    accountStore.activeAccountId = currentAccount.id;
+    state = loadState();
+  }
+  saveAccountStore();
+  renderAll();
 }
 
 function setFormDefaults() {
@@ -1798,11 +2021,18 @@ function summarizeMotion() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const payload = {
+    account: {
+      name: currentAccount.name,
+      email: currentAccount.email,
+    },
+    ...state,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `climb-training-${toDateInputValue(new Date())}.json`;
+  anchor.download = `climb-training-${slugify(currentAccount.name)}-${toDateInputValue(new Date())}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -1835,12 +2065,13 @@ function importData(event) {
 }
 
 function clearData() {
-  if (!confirm("确定清空所有本地记录吗？")) {
+  if (!confirm(`清空当前账号「${currentAccount.name}」的本地数据？这会删除这个账号在本机保存的训练记录、动作片段和路书收藏。`)) {
     return;
   }
   state = {
     entries: [],
     motionSnapshots: [],
+    guidebookSaved: [],
   };
   renderAll();
 }
@@ -1980,6 +2211,14 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function slugify(value) {
+  return String(value || "account")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "account";
 }
 
 window.addEventListener("beforeunload", () => {

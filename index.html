@@ -69,12 +69,37 @@
             <h2 id="viewTitle">训练看板</h2>
           </div>
           <div class="top-actions">
+            <button class="account-button" type="button" id="accountButton" aria-expanded="false" aria-controls="accountPanel">
+              <span id="accountAvatar">C</span>
+              <strong id="accountNameLabel">本地账号</strong>
+            </button>
             <button class="icon-button" type="button" id="exportButton" aria-label="导出数据" title="导出数据">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11.1l3.5-3.5 1.3 1.3-5.7 5.7-5.7-5.7 1.3-1.3 3.5 3.5V3H12Zm-7 16h14v2H5v-2Z"/></svg>
             </button>
             <button class="primary-button" type="button" data-view="log">新增记录</button>
           </div>
         </header>
+
+        <section class="account-panel" id="accountPanel" aria-label="账号面板" hidden>
+          <div class="panel account-panel-inner">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Account</p>
+                <h3>本地账号</h3>
+              </div>
+              <button class="icon-button" type="button" id="accountCloseButton" aria-label="关闭账号面板" title="关闭账号面板">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z"/></svg>
+              </button>
+            </div>
+            <div class="account-summary" id="accountSummary"></div>
+            <div class="account-list" id="accountList"></div>
+            <form class="account-create" id="accountCreateForm">
+              <input id="accountNameInput" type="text" placeholder="新账号名称" maxlength="28" required />
+              <input id="accountEmailInput" type="email" placeholder="邮箱，可选" maxlength="80" />
+              <button class="primary-button" type="submit">创建账号</button>
+            </form>
+          </div>
+        </section>
 
         <section class="view active" id="dashboard-view" aria-labelledby="viewTitle">
           <div class="metric-grid">

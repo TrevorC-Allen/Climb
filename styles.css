@@ -229,6 +229,40 @@ svg {
   gap: 10px;
 }
 
+.account-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 10px 0 7px;
+  font-weight: 750;
+}
+
+.account-button span,
+.account-row-avatar {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--text);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.account-button strong {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
 .primary-button,
 .secondary-button,
 .icon-button,
@@ -288,6 +322,100 @@ svg {
 
 .view {
   display: none;
+}
+
+.account-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  justify-content: end;
+  align-items: start;
+  padding: 80px 28px 28px;
+  background: rgba(245, 245, 247, 0.54);
+  backdrop-filter: blur(12px);
+}
+
+.account-panel[hidden] {
+  display: none;
+}
+
+.account-panel-inner {
+  width: min(440px, calc(100vw - 28px));
+  max-height: calc(100vh - 108px);
+  overflow: auto;
+}
+
+.account-summary,
+.account-list,
+.account-create {
+  display: grid;
+  gap: 10px;
+}
+
+.account-summary-card,
+.account-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 12px;
+}
+
+.account-summary-card span,
+.account-summary-card p,
+.account-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.account-summary-card strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.account-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-row.active {
+  background: var(--blue-soft);
+  border-color: rgba(0, 113, 227, 0.22);
+}
+
+.account-row strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.account-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-row-actions .secondary-button {
+  min-height: 32px;
+  padding: 0 9px;
+}
+
+.account-row-actions .secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.account-create {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  margin-top: 12px;
 }
 
 .view.active {
@@ -1211,6 +1339,11 @@ tbody tr:last-child td {
     align-items: flex-start;
   }
 
+  .top-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .topbar h2 {
     font-size: 26px;
   }
@@ -1255,8 +1388,23 @@ tbody tr:last-child td {
   .progress-item,
   .motion-card,
   .guidebook-card,
-  .route-row {
+  .route-row,
+  .account-row,
+  .account-create {
     grid-template-columns: 1fr;
+  }
+
+  .account-panel {
+    justify-content: stretch;
+    padding: 96px 14px 18px;
+  }
+
+  .account-panel-inner {
+    width: 100%;
+  }
+
+  .account-row-actions {
+    justify-content: flex-start;
   }
 
   .guidebook-search {
@@ -1277,6 +1425,10 @@ tbody tr:last-child td {
 
 @media (max-width: 520px) {
   .top-actions .primary-button {
+    display: none;
+  }
+
+  .account-button strong {
     display: none;
   }
 
