@@ -1,4 +1,4 @@
-const CACHE_NAME = "climb-training-v1";
+const CACHE_NAME = "climb-training-v2";
 
 const APP_SHELL = [
   "./",
@@ -49,7 +49,12 @@ self.addEventListener("fetch", (event) => {
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
             return response;
           })
-          .catch(() => caches.match("./index.html"));
+          .catch(() => {
+            if (event.request.mode === "navigate") {
+              return caches.match("./index.html");
+            }
+            return Response.error();
+          });
       })
   );
 });

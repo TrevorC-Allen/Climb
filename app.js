@@ -34,6 +34,34 @@ const GRADE_OPTIONS = {
   YDS: ["5.7", "5.8", "5.9", "5.10a", "5.10b", "5.10c", "5.10d", "5.11a", "5.11b", "5.11c", "5.11d", "5.12a", "5.12b", "5.12c", "5.12d", "5.13a"],
 };
 
+const MEDIAPIPE_TASKS_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34";
+const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm";
+const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
+
+const POSE_CONNECTIONS = [
+  [11, 12],
+  [11, 13],
+  [13, 15],
+  [12, 14],
+  [14, 16],
+  [11, 23],
+  [12, 24],
+  [23, 24],
+  [23, 25],
+  [25, 27],
+  [27, 31],
+  [24, 26],
+  [26, 28],
+  [28, 32],
+];
+
+const SUPPORT_LANDMARKS = [
+  { id: "leftHand", index: 15 },
+  { id: "rightHand", index: 16 },
+  { id: "leftFoot", index: 31, fallbackIndex: 27 },
+  { id: "rightFoot", index: 32, fallbackIndex: 28 },
+];
+
 const DEFAULT_GYMS = ["Vmore", "香蕉攀岩", "AOB", "岩时"];
 
 const LEGACY_GYM_MAP = {
@@ -48,6 +76,15 @@ let cameraStream = null;
 let overlayFrame = null;
 let showCenterTrail = false;
 let centerTrail = [];
+let poseLandmarker = null;
+let poseModelLoading = false;
+let poseTrackingActive = false;
+let poseFrame = null;
+let latestPoseLandmarks = null;
+let latestPoseValues = null;
+let lastPoseVideoTime = -1;
+let lastPoseRenderTime = 0;
+let supportTracker = {};
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -664,6 +701,7 @@ function toggleCamera() {
   if (cameraStream) {
     cameraStream.getTracks().forEach((track) => track.stop());
     cameraStream = null;
+    stopPoseTracking();
     $("#motionVideo").srcObject = null;
     $("#videoState").textContent = "摄像头已关闭";
     return;
@@ -680,8 +718,8 @@ function toggleCamera() {
       $("#motionVideo").srcObject = stream;
       $("#motionVideo").controls = false;
       $("#motionVideo").muted = true;
-      $("#motionVideo").play();
-      $("#videoState").textContent = "摄像头预览";
+      playVideoAndTrack($("#motionVideo"));
+      $("#videoState").textContent = "摄像头预览，正在准备姿态识别";
     })
     .catch(() => {
       $("#videoState").textContent = "无法开启摄像头";
@@ -702,8 +740,116 @@ function handleVideoImport(event) {
   video.src = URL.createObjectURL(file);
   video.controls = true;
   video.muted = false;
-  video.play();
-  $("#videoState").textContent = "本地视频";
+  playVideoAndTrack(video);
+  $("#videoState").textContent = "本地视频，正在准备姿态识别";
+}
+
+function playVideoAndTrack(video) {
+  const playPromise = video.play();
+  if (playPromise?.then) {
+    playPromise.then(() => startPoseTracking()).catch(() => startPoseTracking());
+    return;
+  }
+  startPoseTracking();
+}
+
+async function startPoseTracking() {
+  if (poseTrackingActive) {
+    return;
+  }
+
+  poseTrackingActive = true;
+  latestPoseLandmarks = null;
+  latestPoseValues = null;
+  supportTracker = {};
+  lastPoseVideoTime = -1;
+  $("#videoState").textContent = "正在加载姿态模型";
+
+  try {
+    await ensurePoseLandmarker();
+    $("#videoState").textContent = "姿态识别已开启";
+    poseFrame = requestAnimationFrame(detectPoseFrame);
+  } catch (error) {
+    poseTrackingActive = false;
+    $("#videoState").textContent = "姿态模型加载失败，已回到演示模式";
+    console.warn("Pose model failed", error);
+  }
+}
+
+function stopPoseTracking() {
+  poseTrackingActive = false;
+  latestPoseLandmarks = null;
+  latestPoseValues = null;
+  supportTracker = {};
+  lastPoseVideoTime = -1;
+  if (poseFrame) {
+    cancelAnimationFrame(poseFrame);
+    poseFrame = null;
+  }
+}
+
+async function ensurePoseLandmarker() {
+  if (poseLandmarker) {
+    return poseLandmarker;
+  }
+
+  if (poseModelLoading) {
+    while (poseModelLoading) {
+      await wait(80);
+    }
+    return poseLandmarker;
+  }
+
+  poseModelLoading = true;
+  try {
+    const { FilesetResolver, PoseLandmarker } = await import(MEDIAPIPE_TASKS_URL);
+    const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
+    poseLandmarker = await createPoseLandmarker(PoseLandmarker, vision, "GPU")
+      .catch(() => createPoseLandmarker(PoseLandmarker, vision, "CPU"));
+    return poseLandmarker;
+  } finally {
+    poseModelLoading = false;
+  }
+}
+
+function createPoseLandmarker(PoseLandmarker, vision, delegate) {
+  return PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: POSE_MODEL_URL,
+      delegate,
+    },
+    runningMode: "VIDEO",
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.45,
+    minPosePresenceConfidence: 0.45,
+    minTrackingConfidence: 0.45,
+  });
+}
+
+function detectPoseFrame(now) {
+  if (!poseTrackingActive || !poseLandmarker) {
+    return;
+  }
+
+  const video = $("#motionVideo");
+  const hasFrame = video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0;
+  const frameChanged = video.srcObject || video.currentTime !== lastPoseVideoTime || video.paused;
+
+  if (hasFrame && frameChanged) {
+    lastPoseVideoTime = video.currentTime;
+    const result = poseLandmarker.detectForVideo(video, now);
+    const landmarks = result.landmarks?.[0];
+    if (landmarks) {
+      latestPoseLandmarks = landmarks;
+      latestPoseValues = derivePoseValues(landmarks, now);
+      if (now - lastPoseRenderTime > 220) {
+        lastPoseRenderTime = now;
+        renderMotionAnalyzer(latestPoseValues);
+      }
+    }
+  }
+
+  poseFrame = requestAnimationFrame(detectPoseFrame);
 }
 
 function toggleCenterTrail() {
@@ -723,14 +869,18 @@ function updateCenterTrailButton() {
 }
 
 function updateMotionAnalyzer() {
-  const values = getMotionValues();
+  renderMotionAnalyzer(getMotionValues());
+  drawMotionOverlay();
+}
+
+function renderMotionAnalyzer(values) {
   const evaluation = evaluateMotion(values);
 
-  $("#leftElbowOutput").textContent = `${values.leftElbow}°`;
-  $("#rightElbowOutput").textContent = `${values.rightElbow}°`;
-  $("#supportOutput").textContent = values.support;
-  $("#centerOutput").textContent = values.centerOffset;
-  $("#twistOutput").textContent = `${values.twist}°`;
+  $("#leftElbowOutput").textContent = `${Math.round(values.leftElbow)}°`;
+  $("#rightElbowOutput").textContent = `${Math.round(values.rightElbow)}°`;
+  $("#supportOutput").textContent = Math.round(values.support);
+  $("#centerOutput").textContent = Math.round(values.centerOffset);
+  $("#twistOutput").textContent = `${Math.round(values.twist)}°`;
 
   $("#motionMetrics").innerHTML = evaluation.cards.map((card) => `
     <article class="motion-card">
@@ -741,8 +891,6 @@ function updateMotionAnalyzer() {
       <span class="motion-badge ${card.level}">${escapeHtml(card.label)}</span>
     </article>
   `).join("");
-
-  drawMotionOverlay();
 }
 
 function getMotionValues() {
@@ -897,6 +1045,12 @@ function drawMotionOverlay() {
     ctx.stroke();
   }
 
+  if (latestPoseLandmarks && latestPoseValues) {
+    drawRealPoseOverlay(ctx, latestPoseLandmarks, latestPoseValues);
+    ctx.restore();
+    return;
+  }
+
   const holds = [
     [225, 385],
     [330, 250],
@@ -972,6 +1126,192 @@ function drawMotionOverlay() {
   ctx.restore();
 }
 
+function drawRealPoseOverlay(ctx, landmarks, values) {
+  const projected = values.projected || projectPoseLandmarks(landmarks);
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+  const centerPoint = values.centerPoint;
+
+  ctx.strokeStyle = "rgba(255,255,255,0.82)";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  POSE_CONNECTIONS.forEach(([fromIndex, toIndex]) => {
+    const from = visiblePoint(projected[fromIndex]);
+    const to = visiblePoint(projected[toIndex]);
+    if (from && to) {
+      drawLine(ctx, from, to);
+    }
+  });
+
+  projected.forEach((point, index) => {
+    if (!visiblePoint(point, 0.45)) {
+      return;
+    }
+    const isSupportPoint = values.supportPointIds?.has(index);
+    ctx.beginPath();
+    ctx.fillStyle = isSupportPoint ? "rgba(52,199,89,0.96)" : "rgba(255,255,255,0.88)";
+    ctx.arc(point[0], point[1], isSupportPoint ? 7 : 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  updateCenterTrail(centerPoint);
+  if (showCenterTrail) {
+    drawCenterTrail(ctx);
+  }
+
+  ctx.strokeStyle = "rgba(10,132,255,0.36)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(width / 2, height * 0.12);
+  ctx.lineTo(width / 2, height * 0.92);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.fillStyle = Math.abs(values.centerOffset) > 55 ? "rgba(255,69,58,0.96)" : Math.abs(values.centerOffset) > 32 ? "rgba(255,159,10,0.96)" : "rgba(10,132,255,0.96)";
+  ctx.arc(centerPoint[0], centerPoint[1], 10, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function derivePoseValues(landmarks) {
+  const projected = projectPoseLandmarks(landmarks);
+  const fallback = getMotionValues();
+  const canvas = $("#motionCanvas");
+  const width = canvas.width;
+  const height = canvas.height;
+  const leftElbow = jointAngle(projected[11], projected[13], projected[15]) || fallback.leftElbow;
+  const rightElbow = jointAngle(projected[12], projected[14], projected[16]) || fallback.rightElbow;
+  const centerPoint = bodyCenter(projected) || [width / 2, height * 0.56];
+  const centerOffset = clamp(((centerPoint[0] - width / 2) / (width / 2)) * 100, -100, 100);
+  const twist = torsoTwist(projected) || fallback.twist;
+  const supportDetails = countStableSupportPoints(projected);
+
+  return {
+    leftElbow,
+    rightElbow,
+    support: supportDetails.count,
+    centerOffset,
+    twist,
+    centerPoint,
+    projected,
+    supportPointIds: supportDetails.indices,
+  };
+}
+
+function projectPoseLandmarks(landmarks) {
+  const canvas = $("#motionCanvas");
+  const video = $("#motionVideo");
+  const width = canvas.width;
+  const height = canvas.height;
+  const videoWidth = video.videoWidth || width;
+  const videoHeight = video.videoHeight || height;
+  const scale = Math.max(width / videoWidth, height / videoHeight);
+  const displayWidth = videoWidth * scale;
+  const displayHeight = videoHeight * scale;
+  const offsetX = (width - displayWidth) / 2;
+  const offsetY = (height - displayHeight) / 2;
+
+  return landmarks.map((landmark) => {
+    const x = offsetX + landmark.x * displayWidth;
+    const y = offsetY + landmark.y * displayHeight;
+    const point = [x, y];
+    point.visibility = landmark.visibility ?? landmark.presence ?? 1;
+    return point;
+  });
+}
+
+function jointAngle(a, b, c) {
+  if (!visiblePoint(a) || !visiblePoint(b) || !visiblePoint(c)) {
+    return null;
+  }
+
+  const ab = [a[0] - b[0], a[1] - b[1]];
+  const cb = [c[0] - b[0], c[1] - b[1]];
+  const dot = ab[0] * cb[0] + ab[1] * cb[1];
+  const abLength = Math.hypot(ab[0], ab[1]);
+  const cbLength = Math.hypot(cb[0], cb[1]);
+  if (!abLength || !cbLength) {
+    return null;
+  }
+
+  const cosine = clamp(dot / (abLength * cbLength), -1, 1);
+  return Math.acos(cosine) * 180 / Math.PI;
+}
+
+function bodyCenter(points) {
+  const weighted = [
+    [points[11], 0.18],
+    [points[12], 0.18],
+    [points[23], 0.28],
+    [points[24], 0.28],
+    [points[25], 0.04],
+    [points[26], 0.04],
+  ].filter(([point]) => visiblePoint(point));
+
+  const weightSum = weighted.reduce((sum, [, weight]) => sum + weight, 0);
+  if (!weightSum) {
+    return null;
+  }
+
+  const x = weighted.reduce((sum, [point, weight]) => sum + point[0] * weight, 0) / weightSum;
+  const y = weighted.reduce((sum, [point, weight]) => sum + point[1] * weight, 0) / weightSum;
+  return [x, y];
+}
+
+function torsoTwist(points) {
+  const leftShoulder = visiblePoint(points[11]);
+  const rightShoulder = visiblePoint(points[12]);
+  const leftHip = visiblePoint(points[23]);
+  const rightHip = visiblePoint(points[24]);
+  if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+    return null;
+  }
+
+  const shoulderAngle = Math.atan2(rightShoulder[1] - leftShoulder[1], rightShoulder[0] - leftShoulder[0]);
+  const hipAngle = Math.atan2(rightHip[1] - leftHip[1], rightHip[0] - leftHip[0]);
+  let diff = Math.abs((shoulderAngle - hipAngle) * 180 / Math.PI);
+  while (diff > 180) {
+    diff -= 180;
+  }
+  if (diff > 90) {
+    diff = 180 - diff;
+  }
+  return diff;
+}
+
+function countStableSupportPoints(points) {
+  const indices = new Set();
+  let count = 0;
+
+  SUPPORT_LANDMARKS.forEach((target) => {
+    const point = visiblePoint(points[target.index]) || visiblePoint(points[target.fallbackIndex]);
+    const landmarkIndex = visiblePoint(points[target.index]) ? target.index : target.fallbackIndex;
+    if (!point) {
+      delete supportTracker[target.id];
+      return;
+    }
+
+    const tracker = supportTracker[target.id] || { point, stillFrames: 0 };
+    const moved = distance(tracker.point, point);
+    tracker.stillFrames = moved < 8 ? Math.min(8, tracker.stillFrames + 1) : Math.max(0, tracker.stillFrames - 2);
+    tracker.point = point;
+    supportTracker[target.id] = tracker;
+
+    if (tracker.stillFrames >= 2) {
+      count += 1;
+      indices.add(landmarkIndex);
+    }
+  });
+
+  return { count, indices };
+}
+
+function visiblePoint(point, threshold = 0.35) {
+  if (!point) {
+    return null;
+  }
+  return (point.visibility ?? 1) >= threshold ? point : null;
+}
+
 function updateCenterTrail(point) {
   if (!showCenterTrail) {
     return;
@@ -1019,6 +1359,12 @@ function drawCenterTrail(ctx) {
 
 function distance(a, b) {
   return Math.hypot(a[0] - b[0], a[1] - b[1]);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function elbowPoint(shoulder, direction, angle) {
