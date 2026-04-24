@@ -70,6 +70,65 @@ const LEGACY_GYM_MAP = {
   "云壁 Climb": "AOB",
 };
 
+const ROADMAP_PHASES = [
+  {
+    phase: "短期",
+    horizon: "0-6 周",
+    intent: "把 MVP 打磨成每天愿意打开的训练日志。",
+    features: [
+      "训练 session：把同一天多条线路归成一次训练，支持热身、项目、容量和恢复类型。",
+      "岩馆与分店：给香蕉攀岩等连锁岩馆增加分店字段，保留跨分店统计。",
+      "动作复盘：把锁臂、重心偏移、开门风险写入视频时间轴，支持一键清爽隐藏叠加层。",
+      "个人基线：稳定难度、最高完成、Flash/Onsight、完成率和训练负荷形成周报。",
+    ],
+  },
+  {
+    phase: "中期",
+    horizon: "2-4 个月",
+    intent: "从记录工具进化成训练管理系统。",
+    features: [
+      "训练计划：按抱石、难度、力量、耐力和技术课生成 4 周计划。",
+      "负荷与恢复：参考训练负荷、强度分布和连续高强度天数，提示轻量日或休息日。",
+      "风格画像：按 slab、overhang、crimp、dynamic、balance 等风格识别短板和进步。",
+      "项目线管理：为长期项目记录 beta、尝试次数、失败点和下次策略。",
+    ],
+  },
+  {
+    phase: "长期",
+    horizon: "6-12 个月",
+    intent: "成为懂你动作模式和攀岩目标的个人教练。",
+    features: [
+      "多设备同步：账号、云端备份、跨手机和电脑同步训练数据。",
+      "个性化模型：用个人历史视频学习你的开门、锁臂和重心失控模式。",
+      "岩馆生态：支持岩馆线路、换线日、排行榜、挑战和好友训练动态。",
+      "教练报告：按月输出技术、体能、成绩和风险趋势，并给出下一阶段目标。",
+    ],
+  },
+];
+
+const PRODUCT_BENCHMARKS = [
+  {
+    product: "Apple Fitness",
+    lesson: "摘要、趋势和奖章让用户快速知道自己有没有持续进步。",
+    appTakeaway: "Climb 的看板应优先展示稳定难度、完成率、训练频率和动作风险趋势。",
+  },
+  {
+    product: "Garmin Connect",
+    lesson: "训练状态、负荷和恢复建议把运动数据变成行动建议。",
+    appTakeaway: "中期加入攀岩负荷、项目强度和恢复提醒，而不是只追最高难度。",
+  },
+  {
+    product: "Strava",
+    lesson: "目标、挑战、分段和社交反馈让训练更有持续动力。",
+    appTakeaway: "长期可以加入岩馆挑战、同路线进步对比和好友训练动态。",
+  },
+  {
+    product: "Nike Run Club",
+    lesson: "训练计划和教练化内容降低用户自己安排训练的成本。",
+    appTakeaway: "短期先做规则建议，中期升级为按目标生成的 4 周攀岩计划。",
+  },
+];
+
 let state = loadState();
 let dashboardFilter = "all";
 let cameraStream = null;
@@ -291,6 +350,7 @@ function setView(viewName) {
     log: "记录训练",
     motion: "动作分析",
     history: "历史记录",
+    roadmap: "产品路线图",
   };
 
   $$(".view").forEach((view) => view.classList.remove("active"));
@@ -317,6 +377,7 @@ function renderAll() {
   renderSessionSummary();
   renderGymOptions();
   renderHistory();
+  renderRoadmap();
   saveState();
 }
 
@@ -667,6 +728,40 @@ function renderHistory() {
       </td>
       <td><button class="delete-row" type="button" data-delete-id="${entry.id}">删除</button></td>
     </tr>
+  `).join("");
+}
+
+function renderRoadmap() {
+  $("#roadmapNow").innerHTML = [
+    ["已完成", "训练日志 / 看板 / 建议"],
+    ["进行中", "真实姿态识别"],
+    ["下一步", "视频时间轴 / Session"],
+  ].map(([label, value]) => `
+    <div class="roadmap-now-item">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `).join("");
+
+  $("#roadmapGrid").innerHTML = ROADMAP_PHASES.map((phase) => `
+    <article class="panel roadmap-phase">
+      <div class="phase-heading">
+        <span class="phase-pill">${escapeHtml(phase.horizon)}</span>
+        <h3>${escapeHtml(phase.phase)}</h3>
+      </div>
+      <p>${escapeHtml(phase.intent)}</p>
+      <ul>
+        ${phase.features.map((feature) => `<li>${escapeHtml(feature)}</li>`).join("")}
+      </ul>
+    </article>
+  `).join("");
+
+  $("#benchmarkGrid").innerHTML = PRODUCT_BENCHMARKS.map((item) => `
+    <article class="benchmark-item">
+      <strong>${escapeHtml(item.product)}</strong>
+      <p>${escapeHtml(item.lesson)}</p>
+      <span>${escapeHtml(item.appTakeaway)}</span>
+    </article>
   `).join("");
 }
 

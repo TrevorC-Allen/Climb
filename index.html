@@ -45,6 +45,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v2H5V4Zm0 5h14v2H5V9Zm0 5h10v2H5v-2Zm0 5h7v2H5v-2Z"/></svg>
             <span>历史</span>
           </button>
+          <button class="nav-item" type="button" data-view="roadmap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4v4H5V4Zm10 0h4v4h-4V4ZM5 16h4v4H5v-4Zm10 0h4v4h-4v-4ZM8.4 8.8l1.2-1.2 4.8 4.8-4.8 4.8-1.2-1.2 3.6-3.6-3.6-3.6Z"/></svg>
+            <span>路线图</span>
+          </button>
         </nav>
 
         <div class="side-summary">
@@ -352,6 +356,29 @@
                 <tbody id="historyTable"></tbody>
               </table>
             </div>
+          </section>
+        </section>
+
+        <section class="view" id="roadmap-view" aria-labelledby="viewTitle">
+          <section class="panel roadmap-hero">
+            <div>
+              <p class="eyebrow">Product Roadmap</p>
+              <h3>从训练日志到攀岩教练</h3>
+              <p class="roadmap-copy">当前版本已经能记录训练、分析成绩结构，并用视频姿态识别辅助判断锁臂、重心和三点支撑。下一步会沿着“记录可信、反馈及时、建议可执行”的方向迭代。</p>
+            </div>
+            <div class="roadmap-now" id="roadmapNow"></div>
+          </section>
+
+          <div class="roadmap-grid" id="roadmapGrid"></div>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Benchmarks</p>
+                <h3>产品参照</h3>
+              </div>
+            </div>
+            <div class="benchmark-grid" id="benchmarkGrid"></div>
           </section>
         </section>
       </main>
