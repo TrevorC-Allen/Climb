@@ -1,7 +1,7 @@
 {
-  "name": "Climb Training",
-  "short_name": "Climb",
-  "description": "A quiet climbing logbook and motion analysis coach.",
+  "name": "StillClimb",
+  "short_name": "StillClimb",
+  "description": "A quiet climbing logbook, guidebook, and motion analysis coach.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

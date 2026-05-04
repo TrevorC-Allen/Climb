@@ -115,7 +115,7 @@ const PRODUCT_BENCHMARKS = [
   {
     product: "Apple Fitness",
     lesson: "摘要、趋势和奖章让用户快速知道自己有没有持续进步。",
-    appTakeaway: "Climb 的看板应优先展示稳定难度、完成率、训练频率和动作风险趋势。",
+    appTakeaway: "StillClimb 的看板应优先展示稳定难度、完成率、训练频率和动作风险趋势。",
   },
   {
     product: "Garmin Connect",
@@ -270,7 +270,7 @@ function loadAccountStore() {
         motionSnapshots: Array.isArray(legacyState.motionSnapshots) ? legacyState.motionSnapshots : [],
         guidebookSaved: Array.isArray(legacyState.guidebookSaved) ? legacyState.guidebookSaved : [],
       })
-    : createSeedState();
+    : createEmptyState();
 
   localStorage.setItem(defaultAccount.dataKey, JSON.stringify(initialState));
   const store = {
@@ -2032,7 +2032,7 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `climb-training-${slugify(currentAccount.name)}-${toDateInputValue(new Date())}.json`;
+  anchor.download = `stillclimb-${slugify(currentAccount.name)}-${toDateInputValue(new Date())}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
