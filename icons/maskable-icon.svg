@@ -1,7 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#f5f5f7"/>
-  <rect x="150" y="235" width="54" height="150" rx="17" fill="#0071e3"/>
-  <rect x="229" y="142" width="54" height="243" rx="17" fill="#248a3d"/>
-  <rect x="308" y="192" width="54" height="193" rx="17" fill="#c56f00"/>
-  <rect x="118" y="406" width="276" height="18" rx="9" fill="#1d1d1f"/>
+  <defs>
+    <linearGradient id="bg" x1="76" y1="38" x2="436" y2="474" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10141c"/>
+      <stop offset=".56" stop-color="#1c2430"/>
+      <stop offset="1" stop-color="#05070c"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="128" y1="78" x2="388" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#536071"/>
+      <stop offset=".5" stop-color="#2d3745"/>
+      <stop offset="1" stop-color="#131923"/>
+    </linearGradient>
+    <linearGradient id="route" x1="174" y1="94" x2="354" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8ee6ff"/>
+      <stop offset=".42" stop-color="#20a7ff"/>
+      <stop offset="1" stop-color="#51f2a3"/>
+    </linearGradient>
+    <filter id="glow" x="-42%" y="-42%" width="184%" height="184%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.05 0 0 0 0 0.63 0 0 0 0 1 0 0 0 .7 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <path d="M86 454 180 74h156l92 380H86Z" fill="url(#wall)"/>
+  <path d="M186 74 86 454h78L264 74h-78Z" fill="#647385" opacity=".24"/>
+  <path d="M286 74 188 454h92L352 74h-66Z" fill="#05070b" opacity=".25"/>
+  <path d="M116 454h280" stroke="#eff7ff" stroke-width="16" stroke-linecap="round" opacity=".9"/>
+  <path d="M188 116c72 42 88 88 45 138-46 55-16 101 82 139" fill="none" stroke="url(#route)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  <g filter="url(#glow)">
+    <circle cx="188" cy="116" r="19" fill="#8ee6ff"/>
+    <circle cx="252" cy="202" r="17" fill="#20a7ff"/>
+    <circle cx="212" cy="294" r="18" fill="#42d7ff"/>
+    <circle cx="315" cy="393" r="21" fill="#51f2a3"/>
+  </g>
+  <path d="M86 454 180 74h156l92 380" fill="none" stroke="#ffffff" stroke-width="3" opacity=".1"/>
 </svg>
