@@ -42,6 +42,7 @@ const POSE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_lan
 const OPENBETA_API_URL = "https://api.openbeta.io";
 const OPENBETA_AREA_URL = "https://openbeta.io/area/";
 const GUIDEBOOK_QUICK_SEARCHES = ["Smith Rock", "Red River Gorge", "Yosemite Valley", "Bishop", "Joshua Tree"];
+const IOS_INSTALL_DISMISSED_KEY = "stillclimb.ios.install.dismissed.v1";
 
 const POSE_CONNECTIONS = [
   [11, 12],
@@ -153,12 +154,14 @@ let lastPoseRenderTime = 0;
 let supportTracker = {};
 let guidebookResults = [];
 let selectedGuidebookArea = null;
+let wakeLock = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 document.addEventListener("DOMContentLoaded", () => {
   $("#todayLabel").textContent = formatLongDate(new Date());
+  setupPlatformSupport();
   renderStyleTags();
   bindEvents();
   setFormDefaults();
@@ -168,6 +171,56 @@ document.addEventListener("DOMContentLoaded", () => {
   startOverlayLoop();
   registerServiceWorker();
 });
+
+function setupPlatformSupport() {
+  const platform = getPlatform();
+  document.documentElement.classList.toggle("ios-device", platform.isIOS);
+  document.body.classList.toggle("standalone-mode", platform.isStandalone);
+  setViewportHeight();
+  window.addEventListener("resize", setViewportHeight);
+  window.addEventListener("orientationchange", () => setTimeout(setViewportHeight, 250));
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  const video = $("#motionVideo");
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.playsInline = true;
+
+  bindIosInstallPrompt(platform);
+}
+
+function getPlatform() {
+  const userAgent = navigator.userAgent || "";
+  const isiPadOS = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent) || isiPadOS;
+  const isStandalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+  return { isIOS, isStandalone };
+}
+
+function setViewportHeight() {
+  document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`);
+}
+
+function bindIosInstallPrompt(platform) {
+  const prompt = $("#iosInstallPrompt");
+  const dismissButton = $("#iosInstallDismiss");
+  if (!prompt || !dismissButton) {
+    return;
+  }
+
+  const dismissed = localStorage.getItem(IOS_INSTALL_DISMISSED_KEY) === "yes";
+  prompt.hidden = !platform.isIOS || platform.isStandalone || dismissed;
+  dismissButton.addEventListener("click", () => {
+    localStorage.setItem(IOS_INSTALL_DISMISSED_KEY, "yes");
+    prompt.hidden = true;
+  });
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === "visible" && cameraStream) {
+    requestWakeLock();
+  }
+}
 
 function bindEvents() {
   $$("[data-view]").forEach((button) => {
@@ -1314,10 +1367,11 @@ function filterByDashboardDiscipline(entries) {
   return entries;
 }
 
-function toggleCamera() {
+async function toggleCamera() {
   if (cameraStream) {
     cameraStream.getTracks().forEach((track) => track.stop());
     cameraStream = null;
+    releaseWakeLock();
     stopPoseTracking();
     $("#motionVideo").srcObject = null;
     $("#videoState").textContent = "摄像头已关闭";
@@ -1329,18 +1383,34 @@ function toggleCamera() {
     return;
   }
 
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-    .then((stream) => {
-      cameraStream = stream;
-      $("#motionVideo").srcObject = stream;
-      $("#motionVideo").controls = false;
-      $("#motionVideo").muted = true;
-      playVideoAndTrack($("#motionVideo"));
-      $("#videoState").textContent = "摄像头预览，正在准备姿态识别";
-    })
-    .catch(() => {
-      $("#videoState").textContent = "无法开启摄像头";
-    });
+  try {
+    const stream = await requestCameraStream();
+    const video = $("#motionVideo");
+    cameraStream = stream;
+    prepareInlineVideo(video);
+    video.srcObject = stream;
+    video.controls = false;
+    video.muted = true;
+    playVideoAndTrack(video);
+    requestWakeLock();
+    $("#videoState").textContent = "摄像头预览，正在准备姿态识别";
+  } catch (error) {
+    $("#videoState").textContent = getPlatform().isIOS ? "iOS 需要 HTTPS 和相机权限" : "无法开启摄像头";
+  }
+}
+
+function requestCameraStream() {
+  const preferred = {
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+    audio: false,
+  };
+
+  return navigator.mediaDevices.getUserMedia(preferred)
+    .catch(() => navigator.mediaDevices.getUserMedia({ video: true, audio: false }));
 }
 
 function handleVideoImport(event) {
@@ -1351,23 +1421,56 @@ function handleVideoImport(event) {
   if (cameraStream) {
     cameraStream.getTracks().forEach((track) => track.stop());
     cameraStream = null;
+    releaseWakeLock();
   }
   const video = $("#motionVideo");
+  prepareInlineVideo(video);
   video.srcObject = null;
   video.src = URL.createObjectURL(file);
   video.controls = true;
-  video.muted = false;
+  video.muted = true;
   playVideoAndTrack(video);
   $("#videoState").textContent = "本地视频，正在准备姿态识别";
 }
 
+function prepareInlineVideo(video) {
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.playsInline = true;
+}
+
 function playVideoAndTrack(video) {
+  prepareInlineVideo(video);
   const playPromise = video.play();
   if (playPromise?.then) {
     playPromise.then(() => startPoseTracking()).catch(() => startPoseTracking());
     return;
   }
   startPoseTracking();
+}
+
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator) || wakeLock) {
+    return;
+  }
+
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => {
+      wakeLock = null;
+    });
+  } catch (error) {
+    wakeLock = null;
+  }
+}
+
+function releaseWakeLock() {
+  if (!wakeLock) {
+    return;
+  }
+
+  wakeLock.release().catch(() => {});
+  wakeLock = null;
 }
 
 async function startPoseTracking() {

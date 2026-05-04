@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796" role="img" aria-labelledby="title desc">
+  <title id="title">StillClimb iOS launch screen</title>
+  <desc id="desc">A quiet launch screen with the StillClimb app mark.</desc>
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f7f9"/>
+      <stop offset="1" stop-color="#ececf1"/>
+    </linearGradient>
+    <linearGradient id="route" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0071e3"/>
+      <stop offset="1" stop-color="#248a3d"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="28" stdDeviation="34" flood-color="#000000" flood-opacity="0.13"/>
+    </filter>
+  </defs>
+
+  <rect width="1290" height="2796" fill="#f5f5f7"/>
+  <rect x="96" y="116" width="1098" height="2564" rx="64" fill="rgba(255,255,255,0.52)"/>
+
+  <g transform="translate(429 1012)" filter="url(#softShadow)">
+    <rect width="432" height="432" rx="96" fill="#111113"/>
+    <path d="M92 326 142 130 214 104 292 150 344 92 344 330 92 330Z" fill="url(#wall)"/>
+    <path d="M143 130 213 105 187 332 92 332Z" fill="#d8d8df"/>
+    <path d="M214 105 292 150 240 332 187 332Z" fill="#f4f4f7"/>
+    <path d="M292 150 344 92 344 332 240 332Z" fill="#c8c8d0"/>
+    <path d="M167 284C183 241 206 213 236 199C262 186 281 166 293 139" fill="none" stroke="url(#route)" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="167" cy="284" r="18" fill="#34c759"/>
+    <circle cx="211" cy="222" r="15" fill="#0a84ff"/>
+    <circle cx="250" cy="191" r="14" fill="#34c759"/>
+    <circle cx="293" cy="139" r="17" fill="#0a84ff"/>
+    <path d="M126 331H354" stroke="#111113" stroke-opacity="0.18" stroke-width="10" stroke-linecap="round"/>
+  </g>
+
+  <text x="645" y="1542" text-anchor="middle" fill="#1d1d1f" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="76" font-weight="750" letter-spacing="0">StillClimb</text>
+  <text x="645" y="1610" text-anchor="middle" fill="#6e6e73" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif" font-size="31" font-weight="600" letter-spacing="0">Train · Guidebook · Motion</text>
+</svg>

@@ -11,6 +11,7 @@
 - 野攀路书：通过 OpenBeta GraphQL API 搜索野攀区域、预览线路、收藏区域，并保留 OpenBeta / theCrag 站外入口。
 - 本地账号：支持在同一设备上创建多个本地账号，训练记录、动作片段和路书收藏按账号隔离。
 - 本地数据：使用浏览器 localStorage 保存，支持按当前账号 JSON 导入导出。
+- iOS 支持：包含 Apple Home Screen 图标、启动图、safe-area 适配、独立运行提示和 iOS Safari 摄像头兼容处理。
 - 产品路线图：内置短期、中期、长期路线图，并记录 Apple Fitness、Garmin Connect、Strava、Nike Run Club 等产品参照。
 
 ## 运行
@@ -39,6 +40,8 @@ http://localhost:5173
 2. 用手机打开发布后的 HTTPS 地址。
 3. iPhone Safari：分享 -> 添加到主屏幕。
 4. Android Chrome：菜单 -> 添加到主屏幕 / 安装应用。
+
+iPhone 上建议使用 Safari 安装；安装后会以独立 App 窗口运行，底部导航会避开 Home Indicator，摄像头分析需要 HTTPS 和系统相机权限。
 
 数据保存在手机浏览器本地；不同设备之间可以用 JSON 导出/导入迁移。
 

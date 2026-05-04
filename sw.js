@@ -1,4 +1,4 @@
-const CACHE_NAME = "stillclimb-v6";
+const CACHE_NAME = "stillclimb-v7";
 
 const APP_SHELL = [
   "./",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./styles.css",
   "./app.js",
   "./favicon.svg",
+  "./apple-touch-icon.png",
   "./manifest.webmanifest",
   "./icons/app-icon.svg",
   "./icons/maskable-icon.svg",
@@ -13,6 +14,7 @@ const APP_SHELL = [
   "./icons/app-icon-512.png",
   "./icons/maskable-icon-512.png",
   "./icons/apple-touch-icon.png",
+  "./icons/apple-launch-portrait.png",
 ];
 
 self.addEventListener("install", (event) => {

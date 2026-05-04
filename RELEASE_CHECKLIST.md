@@ -7,6 +7,15 @@
 - Confirm first-time data is empty except for the default local account.
 - Add the app to the phone home screen and reopen it.
 
+## iOS PWA
+
+- Open the site in iPhone Safari.
+- Confirm the install prompt appears only before Home Screen installation.
+- Add to Home Screen and confirm the app opens standalone without Safari chrome.
+- Confirm the bottom navigation clears the Home Indicator area.
+- Rotate the phone and confirm the layout keeps usable safe-area padding.
+- Start camera analysis and confirm iOS asks for camera permission on HTTPS.
+
 ## Local Accounts
 
 - Create a second local account.
